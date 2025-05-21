@@ -1,0 +1,6 @@
+requests>=2.25.1
+python-dotenv>=0.19.2
+playwright>=1.30.0
+openai>=0.8.0
+anthropic>=0.3.0
+google-generativeai>=0.1.0 

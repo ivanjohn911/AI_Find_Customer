@@ -1,0 +1,268 @@
+# AI 企业与联系人智能搜索工具
+
+[English Version](README_en.md)
+
+一套强大的Python工具集，用于自动化外贸与B2B销售中的客户开发流程。该工具通过搜索引擎API和AI技术，帮助您快速找到目标企业、提取联系方式并识别关键决策者。
+
+## 项目功能
+
+本项目包含三个主要脚本，各自解决销售流程中的不同环节：
+
+1. **企业搜索** (`serper_company_search.py`)
+   - 基于行业、地区和关键词搜索目标企业
+   - 支持自定义搜索查询，完全控制搜索内容
+   - 自动提取企业网站、域名和基本信息
+   - 支持普通搜索和LinkedIn企业专项搜索
+
+2. **联系方式提取** (`extract_contact_info.py`)
+   - 从企业网站自动提取联系信息
+   - 识别电子邮箱、电话号码、实际地址
+   - 收集社交媒体账号（LinkedIn、Twitter、Facebook、Instagram）
+   - 支持多URL批量处理，并优化浏览器资源使用
+   - 可将结果与输入CSV文件合并，便于数据整合
+
+3. **员工与决策者搜索** (`serper_employee_search.py`)
+   - 基于公司名称和职位搜索目标企业的员工
+   - 识别关键决策者和潜在联系人
+   - 提取员工LinkedIn个人资料信息
+
+## 解决的问题
+
+- **降低客户开发成本**：减少手动搜索和数据收集时间，提高销售团队效率
+- **提高客户精准度**：精确定位符合目标行业和地区的企业客户
+- **简化联系流程**：直接获取有效联系信息，无需在多个平台间切换
+- **识别关键决策者**：直接找到企业中的关键职位人员，缩短销售周期
+
+## 技术实现
+
+- **搜索技术**：使用Serper.dev API进行高效的搜索引擎查询
+- **网页内容提取**：使用Playwright自动化浏览器渲染和提取网站内容
+- **AI内容分析**：通过多种LLM模型（OpenAI、火山引擎、Anthropic、Google）分析网页内容提取结构化信息
+- **并行处理**：优化浏览器实例管理，支持高效批量处理
+- **容错机制**：包含超时处理、内容清理和错误恢复功能
+
+## 安装指南
+
+### 前提条件
+
+- Python 3.8+
+- Serper.dev API密钥 ([申请免费密钥](https://serper.dev/))
+- (可选) LLM API密钥（推荐使用国内火山引擎API）
+
+### 安装步骤
+
+1. 克隆或下载项目文件
+
+2. 安装依赖包：
+```bash
+pip install -r requirements.txt
+```
+
+3. 安装Playwright浏览器（用于网站内容提取）：
+```bash
+playwright install chromium
+```
+
+4. 创建`.env`配置文件（在项目根目录）：
+```
+# 必须配置：Serper API密钥
+SERPER_API_KEY=your_serper_api_key_here
+
+# LLM配置（以下选择一种）
+LLM_PROVIDER=huoshan  # 选项: openai, anthropic, google, huoshan, none
+
+# 火山引擎配置（推荐国内用户使用）
+ARK_API_KEY=your_ark_api_key_here
+ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+ARK_MODEL=doubao-1-5-pro-256k-250115
+
+# 或者使用其他LLM服务
+# OPENAI_API_KEY=your_openai_api_key_here
+# ANTHROPIC_API_KEY=your_anthropic_api_key_here
+# GOOGLE_API_KEY=your_google_api_key_here
+
+# 网站提取配置
+HEADLESS=true
+TIMEOUT=15000
+VISIT_CONTACT_PAGE=false
+```
+
+## 使用指南
+
+### 1. 企业搜索
+
+使用`serper_company_search.py`脚本搜索企业信息：
+
+#### 基于行业和地区搜索企业：
+```bash
+python serper_company_search.py --general-search --industry "solar energy" --region "California" --gl "us"
+```
+
+#### 使用自定义查询（完全控制查询内容）：
+```bash
+python serper_company_search.py --general-search --custom-query "top solar panel manufacturers California renewable energy" --gl "us"
+```
+
+#### 参数说明：
+- `--general-search`: 使用普通搜索模式
+- `--linkedin-search`: 使用LinkedIn企业专项搜索模式
+- `--industry`: 目标行业关键词
+- `--region`: 目标地区/城市
+- `--custom-query`: 完全自定义的搜索查询（覆盖industry、region和默认关键词）
+- `--gl`: 地区代码（如"us"、"uk"、"cn"等）
+- `--num`: 返回结果数量（默认30）
+- `--keywords`: 附加关键词（逗号分隔）
+- `--output`: 自定义输出文件名
+
+#### 结果：
+结果将保存在`output/company/`目录下，CSV和JSON格式。文件名根据搜索参数自动生成。
+
+### 2. 联系方式提取
+
+使用`extract_contact_info.py`脚本从网站中提取联系信息：
+
+#### 处理单个网站：
+```bash
+python extract_contact_info.py --url example.com --headless
+```
+
+#### 处理多个网站（从文本文件）：
+```bash
+python extract_contact_info.py --url-list urls.txt --timeout 15000
+```
+
+#### 处理企业搜索结果：
+```bash
+python extract_contact_info.py --csv output/company/general_solar_energy_california_us_1234567890.csv --url-column URL
+```
+
+#### 处理CSV并合并结果：
+```bash
+python extract_contact_info.py --csv companies.csv --url-column URL --merge-results
+```
+
+#### 参数说明：
+- `--url`: 单个网站URL
+- `--url-list`: 包含多个URL的文本文件（每行一个URL）
+- `--csv`: 包含URL列的CSV文件
+- `--url-column`: CSV文件中URL列的名称（默认"URL"）
+- `--domain-column`: 备选域名列名（默认"Domain"）
+- `--output`: 自定义输出文件名
+- `--headless`: 使用无头模式运行浏览器（无界面）
+- `--timeout`: 页面加载超时时间（毫秒）
+- `--visit-contact`: 启用联系页面访问（更全面但更慢）
+- `--merge-results`: 将提取的联系信息与输入CSV合并（仅适用于`--csv`选项）
+
+#### 结果：
+- 基本联系信息结果保存在`output/contact/`目录下，包含以下信息：
+  - 公司名称
+  - 电子邮件地址
+  - 电话号码
+  - 实际地址
+  - 社交媒体链接（LinkedIn、Twitter、Facebook、Instagram）
+  
+- 当使用`--merge-results`时，会生成额外的`*_merged.csv`文件，其中包含原始CSV数据加上提取的联系信息。
+
+### 3. 员工搜索
+
+使用`serper_employee_search.py`脚本查找企业员工和决策者：
+
+#### 搜索特定企业的员工：
+```bash
+python serper_employee_search.py --company "Tesla" --position "sales manager" --location "California"
+```
+
+#### 处理企业列表（从搜索结果）：
+```bash
+python serper_employee_search.py --input-file general_solar_energy_california_us_1234567890.csv --position "CEO" --country "United States"
+```
+
+#### 参数说明：
+- `--company`: 目标公司名称
+- `--input-file`: 包含公司信息的CSV文件（位于output目录）
+- `--position`: 目标职位/职务
+- `--location`: 地点/城市
+- `--country`: 国家
+- `--keywords`: 附加关键词（逗号分隔）
+- `--output`: 自定义输出文件名
+- `--gl`: 地区代码（如"us"、"uk"等）
+- `--num`: 返回结果数量（默认30）
+
+#### 结果：
+结果将保存在`output/employee/`目录下，包含员工姓名、职位、LinkedIn链接和其他可用信息。
+
+## 高级使用技巧
+
+### 完整销售流程自动化：
+
+1. 使用自定义查询搜索目标企业：
+```bash
+python serper_company_search.py --general-search --custom-query "renewable energy companies Texas usa" --gl "us" --output texas_renewable.csv
+```
+
+2. 从搜索结果提取联系信息并合并：
+```bash
+python extract_contact_info.py --csv output/company/texas_renewable.csv --headless --merge-results
+```
+
+3. 查找关键决策者：
+```bash
+python serper_employee_search.py --input-file texas_renewable.csv --position "purchasing manager" --country "United States"
+```
+
+### 优化联系人提取：
+
+- 对于加载较慢的网站，可增加超时时间：
+```bash
+python extract_contact_info.py --url slowwebsite.com --timeout 30000
+```
+
+- 对于特殊网站结构，可开启访问联系页面功能：
+```bash
+python extract_contact_info.py --url example.com --visit-contact
+```
+
+- 批量处理多个URL时性能优化：
+```bash
+# 脚本会自动重用浏览器实例，提高处理效率
+python extract_contact_info.py --url-list many_urls.txt --headless --timeout 10000
+```
+
+## 注意事项与限制
+
+- Serper.dev API有免费额度限制，请合理控制查询频率
+- 部分网站可能禁止自动化访问，可能需要调整请求头或使用代理
+- 联系信息提取准确度取决于网站结构和内容质量
+- 使用时请遵守相关法律法规和各平台使用条款
+- 对于较大批量的处理，建议控制并发和添加足够的延时
+
+## 常见问题
+
+**Q: 无法提取某些网站的联系信息**  
+A: 尝试使用`--visit-contact`参数启用联系页面访问，或调整`--timeout`参数增加加载时间。
+
+**Q: 浏览器窗口频繁打开关闭**  
+A: 添加`--headless`参数使用无头模式，提高运行效率。批量处理多URL时，系统会自动优化浏览器实例使用。
+
+**Q: 如何处理CSV数据中的联系信息**  
+A: 使用`--merge-results`参数将提取的联系信息与原始CSV合并，生成包含所有数据的新文件。
+
+**Q: API密钥配置问题**  
+A: 确保`.env`文件中的API密钥格式正确，且不包含引号或额外空格。
+
+## 联系方式
+
+<div style="display: flex; justify-content: space-between;">
+  <div style="text-align: center; margin-right: 20px;">
+    <h3>个人微信</h3>
+    <img src="img/me_code.jpg" width="200" alt="个人微信二维码">
+  </div>
+  <div style="text-align: center; margin-right: 20px;">
+    <h3>微信交流群</h3>
+    <img src="img/group_code.jpg" width="200" alt="微信群二维码">
+  </div>
+  <div style="text-align: center;">
+    <h3>电报群</h3>
+    <a href="https://t.me/+jjmdspjqpbcwOGFl">加入电报群</a>
+  </div>
+</div> 
