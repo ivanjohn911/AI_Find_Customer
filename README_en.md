@@ -133,12 +133,12 @@ python extract_contact_info.py --url-list urls.txt --timeout 15000
 
 #### Process company search results:
 ```bash
-python extract_contact_info.py --csv output/company/general_solar_energy_california_us_1234567890.csv --url-column URL
+python extract_contact_info.py --csv output/company/general_solar_energy_california_us_1234567890.csv --url-column Domain
 ```
 
 #### Process CSV and merge results:
 ```bash
-python extract_contact_info.py --csv companies.csv --url-column URL --merge-results
+python extract_contact_info.py --csv companies.csv --url-column Domain --merge-results
 ```
 
 #### Parameter Description:
@@ -172,11 +172,6 @@ Use the `serper_employee_search.py` script to find company employees and decisio
 python serper_employee_search.py --company "Tesla" --position "sales manager" --location "California"
 ```
 
-#### Process a list of companies (from search results):
-```bash
-python serper_employee_search.py --input-file general_solar_energy_california_us_1234567890.csv --position "CEO" --country "United States"
-```
-
 #### Parameter Description:
 - `--company`: Target company name
 - `--input-file`: CSV file containing company information (located in the output directory)
@@ -202,31 +197,9 @@ python serper_company_search.py --general-search --custom-query "renewable energ
 
 2. Extract and merge contact information from search results:
 ```bash
-python extract_contact_info.py --csv output/company/texas_renewable.csv --headless --merge-results
+python extract_contact_info.py --csv output/company/texas_renewable.csv --url-column Domain  --headless --merge-results
 ```
 
-3. Find key decision-makers:
-```bash
-python serper_employee_search.py --input-file texas_renewable.csv --position "purchasing manager" --country "United States"
-```
-
-### Optimizing Contact Extraction:
-
-- For websites that load slowly, increase the timeout:
-```bash
-python extract_contact_info.py --url slowwebsite.com --timeout 30000
-```
-
-- For special website structures, enable contact page visiting:
-```bash
-python extract_contact_info.py --url example.com --visit-contact
-```
-
-- Performance optimization when batch processing multiple URLs:
-```bash
-# The script will automatically reuse browser instances for improved efficiency
-python extract_contact_info.py --url-list many_urls.txt --headless --timeout 10000
-```
 
 ## Notes and Limitations
 
@@ -248,7 +221,7 @@ A: Add the `--headless` parameter to use headless mode for improved efficiency. 
 A: Use the `--merge-results` parameter to merge extracted contact information with the original CSV, generating a new file containing all data.
 
 **Q: API key configuration issues**  
-A: Ensure the API keys in the `.env` file are correctly formatted and do not contain quotes or extra spaces. 
+A: Ensure the API keys in the `.env` file are correctly formatted and do not contain quotes or extra spaces.
 
 ## Contact Information
 

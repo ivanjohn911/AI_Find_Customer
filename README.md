@@ -133,12 +133,12 @@ python extract_contact_info.py --url-list urls.txt --timeout 15000
 
 #### 处理企业搜索结果：
 ```bash
-python extract_contact_info.py --csv output/company/general_solar_energy_california_us_1234567890.csv --url-column URL
+python extract_contact_info.py --csv output/company/general_solar_energy_california_us_1234567890.csv --url-column Domain
 ```
 
 #### 处理CSV并合并结果：
 ```bash
-python extract_contact_info.py --csv companies.csv --url-column URL --merge-results
+python extract_contact_info.py --csv companies.csv --url-column Domain --merge-results
 ```
 
 #### 参数说明：
