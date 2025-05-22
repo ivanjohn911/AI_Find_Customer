@@ -4,6 +4,8 @@
 
 A powerful set of Python tools for automating the customer development process in international trade and B2B sales. This tool uses search engine APIs and AI technology to help you quickly find target companies, extract contact information, and identify key decision-makers.
 
+> **Recommended Reading**: If you're not familiar with advanced search engine techniques, we recommend reading this [Advanced Search Engine Usage Tutorial](https://zhuanlan.zhihu.com/p/1908208213234554242) first. It will help you build more effective search queries.
+
 ## Project Features
 
 This project contains three main scripts, each addressing different stages of the sales process:
@@ -115,7 +117,14 @@ python serper_company_search.py --general-search --custom-query "top solar panel
 - `--output`: Custom output filename
 
 #### Results:
-Results will be saved in the `output/company/` directory in CSV and JSON formats. Filenames are automatically generated based on search parameters.
+Results will be saved in the `output/company/` directory in CSV and JSON formats. Filenames are automatically generated based on search parameters. The CSV files include the following columns:
+- Company Name: Name of the company
+- Search Query: The search query used
+- URL: Company website link
+- Domain: Company domain
+- LinkedIn: LinkedIn link (if available)
+- GL: Region code parameter
+- And other detailed information
 
 ### 2. Contact Information Extraction
 
@@ -135,6 +144,8 @@ python extract_contact_info.py --url-list urls.txt --timeout 15000
 ```bash
 python extract_contact_info.py --csv output/company/general_solar_energy_california_us_1234567890.csv --url-column Domain
 ```
+
+> **Note**: When using the `--csv` parameter without specifying `--output`, the output file will be automatically named "contact_info_" plus the original CSV filename. For example, input `general_custom_project_us_1234567890.csv` will generate `contact_info_general_custom_project_us_1234567890.csv`.
 
 #### Process CSV and merge results:
 ```bash
@@ -171,6 +182,13 @@ Use the `serper_employee_search.py` script to find company employees and decisio
 ```bash
 python serper_employee_search.py --company "Tesla" --position "sales manager" --location "California"
 ```
+
+#### Process a list of companies (from search results):
+```bash
+python serper_employee_search.py --input-file general_solar_energy_california_us_1234567890.csv --position "CEO" --country "United States"
+```
+
+> **Note**: When using the `--input-file` parameter, the CSV file must contain a `Company Name` column, which the script will use to search for employees. The CSV file can also contain an optional `Location` column for localizing employees.
 
 #### Parameter Description:
 - `--company`: Target company name

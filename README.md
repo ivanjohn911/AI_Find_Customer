@@ -4,6 +4,8 @@
 
 一套强大的Python工具集，用于自动化外贸与B2B销售中的客户开发流程。该工具通过搜索引擎API和AI技术，帮助您快速找到目标企业、提取联系方式并识别关键决策者。
 
+> **推荐阅读**: 如果您不熟悉搜索引擎的高级用法，建议先阅读这篇[搜索引擎高级使用教程](https://zhuanlan.zhihu.com/p/1908208213234554242)，它将帮助您更有效地构建搜索查询。
+
 ## 项目功能
 
 本项目包含三个主要脚本，各自解决销售流程中的不同环节：
@@ -115,7 +117,14 @@ python serper_company_search.py --general-search --custom-query "top solar panel
 - `--output`: 自定义输出文件名
 
 #### 结果：
-结果将保存在`output/company/`目录下，CSV和JSON格式。文件名根据搜索参数自动生成。
+结果将保存在`output/company/`目录下，CSV和JSON格式。文件名根据搜索参数自动生成。CSV文件包含以下列：
+- Company Name：企业名称
+- Search Query：搜索查询
+- URL：企业网站链接
+- Domain：企业域名
+- LinkedIn：LinkedIn链接（如果可用）
+- GL：地区代码参数
+- 以及其他详细信息
 
 ### 2. 联系方式提取
 
@@ -135,6 +144,8 @@ python extract_contact_info.py --url-list urls.txt --timeout 15000
 ```bash
 python extract_contact_info.py --csv output/company/general_solar_energy_california_us_1234567890.csv --url-column Domain
 ```
+
+> **注意**：当使用`--csv`参数但不指定`--output`时，输出文件将自动命名为"contact_info_"加原始CSV文件名。例如，输入`general_custom_project_us_1234567890.csv`将生成`contact_info_general_custom_project_us_1234567890.csv`。
 
 #### 处理CSV并合并结果：
 ```bash
@@ -176,6 +187,8 @@ python serper_employee_search.py --company "Tesla" --position "sales manager" --
 ```bash
 python serper_employee_search.py --input-file general_solar_energy_california_us_1234567890.csv --position "CEO" --country "United States"
 ```
+
+> **注意**：使用`--input-file`参数时，CSV文件必须包含`Company Name`列（公司名称），脚本将使用此列查找企业的员工。CSV文件也可以包含可选的`Location`列，用于定位员工。
 
 #### 参数说明：
 - `--company`: 目标公司名称

@@ -144,7 +144,7 @@ class SerperCompanySearch:
             # Write header
             writer.writerow([
                 'Company Name', 'Search Query', 'LinkedIn URL', 'Title', 'Description', 
-                'Type'
+                'Type', 'GL'
             ])
             # Write data
             for company in companies:
@@ -154,7 +154,8 @@ class SerperCompanySearch:
                     company['linkedin'],
                     company['title'],
                     company['description'],
-                    company['type']
+                    company['type'],
+                    self.gl
                 ])
         
         print(f"LinkedIn search results saved to {output_file}")
@@ -162,6 +163,9 @@ class SerperCompanySearch:
         # Also save as JSON
         json_output_file = output_file.replace('.csv', '.json')
         with open(json_output_file, 'w', encoding='utf-8') as f:
+            # Add gl to each company record in the JSON
+            for company in companies:
+                company['gl'] = self.gl
             json.dump(companies, f, indent=2, ensure_ascii=False)
         
         print(f"LinkedIn search results also saved to {json_output_file}")
@@ -307,7 +311,7 @@ class SerperCompanySearch:
             # Write header
             writer.writerow([
                 'Company Name', 'Search Query', 'URL', 'Title', 'Description', 'Domain', 
-                'LinkedIn', 'Type', 'Custom Query'
+                'LinkedIn', 'Type', 'Custom Query', 'GL'
             ])
             # Write data
             for company in companies:
@@ -320,7 +324,8 @@ class SerperCompanySearch:
                     company.get('domain', ''),
                     company.get('linkedin', ''),
                     company.get('type', ''),
-                    company.get('custom_query', '')  # 添加自定义查询字段
+                    company.get('custom_query', ''),
+                    self.gl
                 ])
         
         print(f"General search results saved to {output_file}")
@@ -328,6 +333,9 @@ class SerperCompanySearch:
         # Also save as JSON
         json_output_file = output_file.replace('.csv', '.json')
         with open(json_output_file, 'w', encoding='utf-8') as f:
+            # Add gl to each company record in the JSON
+            for company in companies:
+                company['gl'] = self.gl
             json.dump(companies, f, indent=2, ensure_ascii=False)
         
         print(f"General search results also saved to {json_output_file}")

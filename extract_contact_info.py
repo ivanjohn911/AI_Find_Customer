@@ -1001,9 +1001,17 @@ def main():
     if args.headless:
         os.environ["HEADLESS"] = "true"
     
+    # 根据输入CSV文件生成输出文件名
+    output_file = args.output
+    if args.csv and not output_file:
+        # 从CSV文件路径中提取文件名
+        csv_filename = os.path.basename(args.csv)
+        # 添加contact_info_前缀
+        output_file = f"contact_info_{csv_filename}"
+    
     # Create extractor
     extractor = ContactExtractor(
-        output_file=args.output, 
+        output_file=output_file, 
         visit_contact_page=visit_contact_page,
         merge_with_input=args.merge_results and args.csv
     )
