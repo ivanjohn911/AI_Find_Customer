@@ -20,6 +20,9 @@ var/
 .installed.cfg
 *.egg
 
+# Claude Code configuration
+CLAUDE.md
+.claude/
 # Virtual Environment
 venv/
 ENV/
