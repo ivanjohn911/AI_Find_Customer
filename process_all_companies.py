@@ -5,6 +5,7 @@ import os
 import glob
 import time
 import sys
+import subprocess
 
 def main():
     # 公司CSV文件目录
@@ -29,20 +30,29 @@ def main():
         csv_name = os.path.basename(csv_file)
         print(f"\n[{i+1}/{len(csv_files)}] 正在处理: {csv_name}")
         
-        # 构建命令
-        command = f'python extract_contact_info.py --csv "{csv_file}" --url-column Domain --headless --merge-results'
-        print(f"执行命令: {command}")
+        # 构建命令（使用列表格式以避免注入攻击）
+        command = [
+            'python', 
+            'extract_contact_info.py', 
+            '--csv', csv_file, 
+            '--url-column', 'Domain', 
+            '--headless', 
+            '--merge-results'
+        ]
+        print(f"执行命令: {' '.join(command)}")
         
-        # 执行命令
+        # 执行命令（使用subprocess.run替代os.system以提高安全性）
         start_time = time.time()
-        exit_code = os.system(command)
+        result = subprocess.run(command, capture_output=True, text=True)
         end_time = time.time()
         
         # 检查命令执行结果
-        if exit_code == 0:
+        if result.returncode == 0:
             print(f"✓ 成功处理 {csv_name}, 耗时: {end_time - start_time:.2f}秒")
         else:
-            print(f"✗ 处理 {csv_name} 失败，退出码: {exit_code}")
+            print(f"✗ 处理 {csv_name} 失败，退出码: {result.returncode}")
+            if result.stderr:
+                print(f"  错误信息: {result.stderr}")
         
         # 在处理下一个文件前等待一会儿
         if i < len(csv_files) - 1:

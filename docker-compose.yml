@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  ai-customer-finder:
+    build: .
+    container_name: ai-customer-finder
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./output:/app/output
+      - ./.env:/app/.env:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    networks:
+      - ai-finder-network
+
+networks:
+  ai-finder-network:
+    driver: bridge

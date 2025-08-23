@@ -1,32 +1,46 @@
 # AI 企业与联系人智能搜索工具
 
-[English Version](README_en.md)
+[English Version](README_en.md) | [Web 界面说明](README_WEB.md) | [Docker 部署](DOCKER_DEPLOY.md)
 
-一套强大的Python工具集，用于自动化外贸与B2B销售中的客户开发流程。该工具通过搜索引擎API和AI技术，帮助您快速找到目标企业、提取联系方式并识别关键决策者。
+一套强大的Python工具集，用于自动化外贸与B2B销售中的客户开发流程。该工具通过搜索引擎API和AI技术，帮助您快速找到目标企业、提取联系方式并识别关键决策者。支持命令行和Web界面两种使用方式。
 
 > **推荐阅读**: 如果您不熟悉搜索引擎的高级用法，建议先阅读这篇[搜索引擎高级使用教程](https://zhuanlan.zhihu.com/p/1908208213234554242)，它将帮助您更有效地构建搜索查询。
 
 ## 项目功能
 
-本项目包含三个主要脚本，各自解决销售流程中的不同环节：
+### 核心功能
 
-1. **企业搜索** (`serper_company_search.py`)
-   - 基于行业、地区和关键词搜索目标企业
-   - 支持自定义搜索查询，完全控制搜索内容
-   - 自动提取企业网站、域名和基本信息
-   - 支持普通搜索和LinkedIn企业专项搜索
+本项目提供**两种使用方式**：
 
-2. **联系方式提取** (`extract_contact_info.py`)
-   - 从企业网站自动提取联系信息
-   - 识别电子邮箱、电话号码、实际地址
-   - 收集社交媒体账号（LinkedIn、Twitter、Facebook、Instagram）
-   - 支持多URL批量处理，并优化浏览器资源使用
-   - 可将结果与输入CSV文件合并，便于数据整合
+#### 1. 命令行工具（适合技术用户）
+包含三个主要Python脚本，各自解决销售流程中的不同环节：
 
-3. **员工与决策者搜索** (`serper_employee_search.py`)
-   - 基于公司名称和职位搜索目标企业的员工
-   - 识别关键决策者和潜在联系人
-   - 提取员工LinkedIn个人资料信息
+- **企业搜索** (`serper_company_search.py`)
+  - 基于行业、地区和关键词搜索目标企业
+  - 支持自定义搜索查询，完全控制搜索内容
+  - 自动提取企业网站、域名和基本信息
+  - 支持普通搜索和LinkedIn企业专项搜索
+
+- **联系方式提取** (`extract_contact_info.py`)
+  - 从企业网站自动提取联系信息
+  - 识别电子邮箱、电话号码、实际地址
+  - 收集社交媒体账号（LinkedIn、Twitter、Facebook、Instagram）
+  - 支持多URL批量处理，并优化浏览器资源使用
+  - 可将结果与输入CSV文件合并，便于数据整合
+
+- **员工与决策者搜索** (`serper_employee_search.py`)
+  - 基于公司名称和职位搜索目标企业的员工
+  - 识别关键决策者和潜在联系人
+  - 提取员工LinkedIn个人资料信息
+
+#### 2. Web界面（适合非技术用户）
+基于Streamlit的现代化Web界面，提供：
+
+- **可视化操作界面** - 无需命令行知识即可使用
+- **实时结果展示** - 即时查看搜索和提取结果
+- **批量处理管理** - 轻松管理多个批量任务
+- **数据导出功能** - 一键下载CSV/JSON格式结果
+- **Docker部署支持** - 快速部署到任何服务器
 
 ## 解决的问题
 
@@ -50,8 +64,9 @@
 - Python 3.8+
 - Serper.dev API密钥 ([申请免费密钥](https://serper.dev/))
 - (可选) LLM API密钥（推荐使用国内火山引擎API）
+- (可选) Docker和Docker Compose（用于容器化部署）
 
-### 安装步骤
+### 方法一：本地安装
 
 1. 克隆或下载项目文件
 
@@ -89,9 +104,53 @@ TIMEOUT=15000
 VISIT_CONTACT_PAGE=false
 ```
 
+### 方法二：Docker快速部署（推荐）
+
+使用Docker可以避免环境配置问题，特别适合生产环境部署：
+
+```bash
+# 1. 配置环境变量
+cp .env.example .env
+# 编辑.env文件，添加您的API密钥
+
+# 2. 使用部署脚本（推荐）
+chmod +x docker_deploy.sh
+./docker_deploy.sh
+
+# 或手动使用docker-compose
+docker-compose up -d
+```
+
+部署完成后，访问 `http://localhost:8501` 即可使用Web界面。
+
+详细的Docker部署说明请参考[Docker部署指南](DOCKER_DEPLOY.md)。
+
 ## 使用指南
 
-### 1. 企业搜索
+### Web界面使用（推荐新手）
+
+1. **启动Web服务**：
+```bash
+# 本地启动
+streamlit run streamlit_app.py
+
+# 或使用Docker
+docker-compose up -d
+```
+
+2. **访问界面**：在浏览器中打开 `http://localhost:8501`
+
+3. **使用功能**：
+   - 从左侧菜单选择功能（企业搜索、联系提取、员工搜索）
+   - 填写搜索条件
+   - 点击执行并查看结果
+   - 下载CSV或JSON格式数据
+
+详细的Web界面使用说明请参考[Web界面指南](README_WEB.md)。
+
+### 命令行使用
+
+#### 1. 企业搜索
 
 使用`serper_company_search.py`脚本搜索企业信息：
 
@@ -126,7 +185,7 @@ python serper_company_search.py --general-search --custom-query "top solar panel
 - GL：地区代码参数
 - 以及其他详细信息
 
-### 2. 联系方式提取
+#### 2. 联系方式提取
 
 使用`extract_contact_info.py`脚本从网站中提取联系信息：
 
@@ -174,7 +233,7 @@ python extract_contact_info.py --csv companies.csv --url-column Domain --merge-r
   
 - 当使用`--merge-results`时，会生成额外的`*_merged.csv`文件，其中包含原始CSV数据加上提取的联系信息。
 
-### 3. 员工搜索
+#### 3. 员工搜索
 
 使用`serper_employee_search.py`脚本查找企业员工和决策者：
 
@@ -221,6 +280,23 @@ python extract_contact_info.py --csv output/company/texas_renewable.csv --headle
 3. 查找关键决策者：
 ```bash
 python serper_employee_search.py --input-file texas_renewable.csv --position "purchasing manager" --country "United States"
+```
+
+### 批量处理脚本：
+
+项目提供了批量处理脚本，用于自动化处理多个文件：
+
+- **`process_all_companies.py`** - 批量处理所有企业CSV文件（中文版）
+- **`process_all_companies_en.py`** - 批量处理所有企业CSV文件（英文版）
+
+```bash
+# 批量处理output/company/目录下的所有CSV文件
+python process_all_companies.py
+
+# 会自动：
+# 1. 读取output/company/目录下的所有CSV文件
+# 2. 对每个文件提取联系信息
+# 3. 生成对应的联系信息文件到output/contact/
 ```
 
 ### 优化联系人提取：

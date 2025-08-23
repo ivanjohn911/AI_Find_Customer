@@ -1,32 +1,46 @@
 # AI Business and Contact Intelligence Search Tool
 
-[中文版本](README.md)
+[中文版本](README.md) | [Web Interface Guide](README_WEB.md) | [Docker Deployment](DOCKER_DEPLOY.md)
 
-A powerful set of Python tools for automating the customer development process in international trade and B2B sales. This tool uses search engine APIs and AI technology to help you quickly find target companies, extract contact information, and identify key decision-makers.
+A powerful set of Python tools for automating the customer development process in international trade and B2B sales. This tool uses search engine APIs and AI technology to help you quickly find target companies, extract contact information, and identify key decision-makers. Supports both command-line and web interface usage.
 
 > **Recommended Reading**: If you're not familiar with advanced search engine techniques, we recommend reading this [Advanced Search Engine Usage Tutorial](https://zhuanlan.zhihu.com/p/1908208213234554242) first. It will help you build more effective search queries.
 
 ## Project Features
 
-This project contains three main scripts, each addressing different stages of the sales process:
+### Core Features
 
-1. **Company Search** (`serper_company_search.py`)
-   - Search for target companies based on industry, region, and keywords
-   - Support custom search queries with full control over search content
-   - Automatically extract company websites, domains, and basic information
-   - Support for both general search and LinkedIn company-specific search
+This project provides **two usage methods**:
 
-2. **Contact Information Extraction** (`extract_contact_info.py`)
-   - Automatically extract contact information from company websites
-   - Identify email addresses, phone numbers, and physical addresses
-   - Collect social media accounts (LinkedIn, Twitter, Facebook, Instagram)
-   - Support for batch processing of multiple URLs while optimizing browser resources
-   - Option to merge results with input CSV files for data integration
+#### 1. Command-Line Tools (For Technical Users)
+Contains three main Python scripts, each addressing different stages of the sales process:
 
-3. **Employee and Decision-Maker Search** (`serper_employee_search.py`)
-   - Search for employees of target companies based on company name and position
-   - Identify key decision-makers and potential contacts
-   - Extract information from employee LinkedIn profiles
+- **Company Search** (`serper_company_search.py`)
+  - Search for target companies based on industry, region, and keywords
+  - Support custom search queries with full control over search content
+  - Automatically extract company websites, domains, and basic information
+  - Support for both general search and LinkedIn company-specific search
+
+- **Contact Information Extraction** (`extract_contact_info.py`)
+  - Automatically extract contact information from company websites
+  - Identify email addresses, phone numbers, and physical addresses
+  - Collect social media accounts (LinkedIn, Twitter, Facebook, Instagram)
+  - Support for batch processing of multiple URLs while optimizing browser resources
+  - Option to merge results with input CSV files for data integration
+
+- **Employee and Decision-Maker Search** (`serper_employee_search.py`)
+  - Search for employees of target companies based on company name and position
+  - Identify key decision-makers and potential contacts
+  - Extract information from employee LinkedIn profiles
+
+#### 2. Web Interface (For Non-Technical Users)
+Modern Streamlit-based web interface providing:
+
+- **Visual Operation Interface** - Use without command-line knowledge
+- **Real-time Result Display** - View search and extraction results instantly
+- **Batch Processing Management** - Easily manage multiple batch tasks
+- **Data Export Function** - One-click download of CSV/JSON format results
+- **Docker Deployment Support** - Quick deployment to any server
 
 ## Problems Solved
 
@@ -50,8 +64,9 @@ This project contains three main scripts, each addressing different stages of th
 - Python 3.8+
 - Serper.dev API key ([Apply for free key](https://serper.dev/))
 - (Optional) LLM API key (Volcano Engine API recommended for users in China)
+- (Optional) Docker and Docker Compose (for containerized deployment)
 
-### Installation Steps
+### Method 1: Local Installation
 
 1. Clone or download the project files
 
@@ -89,9 +104,53 @@ TIMEOUT=15000
 VISIT_CONTACT_PAGE=false
 ```
 
+### Method 2: Docker Quick Deployment (Recommended)
+
+Using Docker avoids environment configuration issues and is especially suitable for production deployment:
+
+```bash
+# 1. Configure environment variables
+cp .env.example .env
+# Edit .env file to add your API keys
+
+# 2. Use deployment script (recommended)
+chmod +x docker_deploy.sh
+./docker_deploy.sh
+
+# Or manually use docker-compose
+docker-compose up -d
+```
+
+After deployment, visit `http://localhost:8501` to use the web interface.
+
+For detailed Docker deployment instructions, please refer to [Docker Deployment Guide](DOCKER_DEPLOY.md).
+
 ## Usage Guide
 
-### 1. Company Search
+### Web Interface Usage (Recommended for Beginners)
+
+1. **Start Web Service**:
+```bash
+# Local startup
+streamlit run streamlit_app.py
+
+# Or use Docker
+docker-compose up -d
+```
+
+2. **Access Interface**: Open `http://localhost:8501` in your browser
+
+3. **Use Features**:
+   - Select function from left menu (Company Search, Contact Extraction, Employee Search)
+   - Fill in search criteria
+   - Click execute and view results
+   - Download data in CSV or JSON format
+
+For detailed web interface instructions, please refer to [Web Interface Guide](README_WEB.md).
+
+### Command-Line Usage
+
+#### 1. Company Search
 
 Use the `serper_company_search.py` script to search for company information:
 
@@ -126,7 +185,7 @@ Results will be saved in the `output/company/` directory in CSV and JSON formats
 - GL: Region code parameter
 - And other detailed information
 
-### 2. Contact Information Extraction
+#### 2. Contact Information Extraction
 
 Use the `extract_contact_info.py` script to extract contact information from websites:
 
@@ -174,7 +233,7 @@ python extract_contact_info.py --csv companies.csv --url-column Domain --merge-r
   
 - When using `--merge-results`, an additional `*_merged.csv` file is generated, containing the original CSV data plus the extracted contact information.
 
-### 3. Employee Search
+#### 3. Employee Search
 
 Use the `serper_employee_search.py` script to find company employees and decision-makers:
 
@@ -215,7 +274,47 @@ python serper_company_search.py --general-search --custom-query "renewable energ
 
 2. Extract and merge contact information from search results:
 ```bash
-python extract_contact_info.py --csv output/company/texas_renewable.csv --url-column Domain  --headless --merge-results
+python extract_contact_info.py --csv output/company/texas_renewable.csv --url-column Domain --headless --merge-results
+```
+
+3. Find key decision-makers:
+```bash
+python serper_employee_search.py --input-file texas_renewable.csv --position "purchasing manager" --country "United States"
+```
+
+### Batch Processing Scripts:
+
+The project provides batch processing scripts for automating multiple file processing:
+
+- **`process_all_companies.py`** - Batch process all company CSV files (Chinese version)
+- **`process_all_companies_en.py`** - Batch process all company CSV files (English version)
+
+```bash
+# Batch process all CSV files in output/company/ directory
+python process_all_companies_en.py
+
+# Will automatically:
+# 1. Read all CSV files from output/company/ directory
+# 2. Extract contact information for each file
+# 3. Generate corresponding contact info files to output/contact/
+```
+
+### Optimize Contact Extraction:
+
+- For slow-loading websites, increase timeout:
+```bash
+python extract_contact_info.py --url slowwebsite.com --timeout 30000
+```
+
+- For special website structures, enable contact page visiting:
+```bash
+python extract_contact_info.py --url example.com --visit-contact
+```
+
+- Performance optimization for batch processing multiple URLs:
+```bash
+# Script automatically reuses browser instances for improved efficiency
+python extract_contact_info.py --url-list many_urls.txt --headless --timeout 10000
 ```
 
 

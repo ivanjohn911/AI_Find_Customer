@@ -7,6 +7,7 @@ import time
 import csv
 import re
 import argparse
+import random
 import requests
 from dotenv import load_dotenv
 
@@ -23,6 +24,8 @@ if not os.path.exists(COMPANY_OUTPUT_DIR):
     print(f"Created output directory: {COMPANY_OUTPUT_DIR}")
 
 class SerperCompanySearch:
+    MAX_RETRIES = 3  # 最大重试次数
+    
     def __init__(self, output_file="company_search_results.csv", gl="us", num_results=30):
         self.api_key = os.getenv("SERPER_API_KEY")
         if not self.api_key:
@@ -74,29 +77,36 @@ class SerperCompanySearch:
             "num": self.num_results
         })
         
-        try:
-            response = requests.post(self.base_url, headers=self.headers, data=payload)
-            response.raise_for_status()
-            results = response.json()
-            
-            # Process results
-            companies = self.extract_linkedin_companies(results, query)
-            
-            # Create a filename with search parameters and timestamp
-            timestamp = int(time.time())
-            industry_str = industry.replace(' ', '_').lower() if industry else 'no_industry'
-            region_str = region.replace(' ', '_').lower() if region else 'no_region'
-            gl_str = self.gl.lower()
-            
-            output_file = os.path.join(COMPANY_OUTPUT_DIR, 
-                f"linkedin_{industry_str}_{region_str}_{gl_str}_{timestamp}.csv")
-            
-            self.save_linkedin_results(companies, output_file)
-            
-            return companies
-        except requests.exceptions.RequestException as e:
-            print(f"Error searching LinkedIn companies: {e}")
-            return None
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                response = requests.post(self.base_url, headers=self.headers, data=payload)
+                response.raise_for_status()
+                results = response.json()
+                
+                # Process results
+                companies = self.extract_linkedin_companies(results, query)
+                
+                # Create a filename with search parameters and timestamp
+                timestamp = int(time.time())
+                industry_str = industry.replace(' ', '_').lower() if industry else 'no_industry'
+                region_str = region.replace(' ', '_').lower() if region else 'no_region'
+                gl_str = self.gl.lower()
+                
+                output_file = os.path.join(COMPANY_OUTPUT_DIR, 
+                    f"linkedin_{industry_str}_{region_str}_{gl_str}_{timestamp}.csv")
+                
+                self.save_linkedin_results(companies, output_file)
+                
+                return companies
+            except requests.exceptions.RequestException as e:
+                print(f"Attempt {attempt + 1}/{self.MAX_RETRIES} failed: {e}")
+                if attempt < self.MAX_RETRIES - 1:
+                    backoff_time = (2 ** attempt) * random.uniform(1, 3)
+                    print(f"Waiting {backoff_time:.1f} seconds before retrying...")
+                    time.sleep(backoff_time)
+                else:
+                    print(f"Error searching LinkedIn companies after {self.MAX_RETRIES} retries")
+                    return None
     
     def extract_linkedin_companies(self, search_results, query):
         """Extract company information from LinkedIn search results"""
@@ -174,8 +184,10 @@ class SerperCompanySearch:
     
     def search_general_companies(self, industry=None, region=None, additional_keywords=None, custom_query=None):
         """Search for companies on Google based on industry, region, and keywords without LinkedIn restriction"""
-        # Use custom query if provided, otherwise construct the search query
+        # 输入验证和清理
         if custom_query:
+            # 限制查询长度和内容以防止注入
+            custom_query = custom_query[:500]  # 限制最大长度
             query = custom_query
             print(f"Searching with custom query: {query}")
             query_for_results = custom_query  # 保存原始自定义查询
@@ -205,41 +217,50 @@ class SerperCompanySearch:
             "num": self.num_results
         })
         
-        try:
-            response = requests.post(self.base_url, headers=self.headers, data=payload)
-            response.raise_for_status()
-            results = response.json()
-            
-            # Extract information for multiple companies
-            companies = self.extract_general_companies(results, query_for_results, custom_query)
-            
-            # Create a filename with search parameters and timestamp
-            timestamp = int(time.time())
-            if custom_query:
-                # 处理自定义查询，使其适合作为文件名
-                query_str = custom_query.replace(' ', '_').replace('"', '').lower()
-                # 限制长度并移除不合法的文件名字符
-                query_str = ''.join(c for c in query_str if c.isalnum() or c in '_-')[:40]
-                gl_str = self.gl.lower()
-                output_file = os.path.join(COMPANY_OUTPUT_DIR, 
-                    f"general_custom_{query_str}_{gl_str}_{timestamp}.csv")
-            else:
-                industry_str = industry.replace(' ', '_').lower() if industry else 'no_industry'
-                region_str = region.replace(' ', '_').lower() if region else 'no_region'
-                gl_str = self.gl.lower()
-                output_file = os.path.join(COMPANY_OUTPUT_DIR, 
-                    f"general_{industry_str}_{region_str}_{gl_str}_{timestamp}.csv")
-            
-            # Save results
-            self.save_general_results(companies, output_file)
-            
-            print(f"\nFound {len(companies)} potential companies matching search criteria")
-            print(f"Results saved to {output_file} and {output_file.replace('.csv', '.json')}")
-            
-            return companies
-        except requests.exceptions.RequestException as e:
-            print(f"Error searching for companies: {e}")
-            return None
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                response = requests.post(self.base_url, headers=self.headers, data=payload)
+                response.raise_for_status()
+                results = response.json()
+                
+                # Extract information for multiple companies
+                companies = self.extract_general_companies(results, query_for_results, custom_query)
+                
+                # Create a filename with search parameters and timestamp
+                timestamp = int(time.time())
+                if custom_query:
+                    # 处理自定义查询，使其适合作为文件名（增强安全性）
+                    # 移除所有路径分隔符和危险字符
+                    query_str = custom_query.replace('/', '').replace('\\', '').replace('..', '')
+                    query_str = query_str.replace(' ', '_').replace('"', '').lower()
+                    # 限制长度并只保留安全字符
+                    query_str = ''.join(c for c in query_str if c.isalnum() or c in '_-')[:40]
+                    gl_str = self.gl.lower()
+                    output_file = os.path.join(COMPANY_OUTPUT_DIR, 
+                        f"general_custom_{query_str}_{gl_str}_{timestamp}.csv")
+                else:
+                    industry_str = industry.replace(' ', '_').lower() if industry else 'no_industry'
+                    region_str = region.replace(' ', '_').lower() if region else 'no_region'
+                    gl_str = self.gl.lower()
+                    output_file = os.path.join(COMPANY_OUTPUT_DIR, 
+                        f"general_{industry_str}_{region_str}_{gl_str}_{timestamp}.csv")
+                
+                # Save results
+                self.save_general_results(companies, output_file)
+                
+                print(f"\nFound {len(companies)} potential companies matching search criteria")
+                print(f"Results saved to {output_file} and {output_file.replace('.csv', '.json')}")
+                
+                return companies
+            except requests.exceptions.RequestException as e:
+                print(f"Attempt {attempt + 1}/{self.MAX_RETRIES} failed: {e}")
+                if attempt < self.MAX_RETRIES - 1:
+                    backoff_time = (2 ** attempt) * random.uniform(1, 3)
+                    print(f"Waiting {backoff_time:.1f} seconds before retrying...")
+                    time.sleep(backoff_time)
+                else:
+                    print(f"Error searching for companies after {self.MAX_RETRIES} retries")
+                    return None
     
     def extract_general_companies(self, search_results, query, custom_query=None):
         """Extract company information from general search results"""

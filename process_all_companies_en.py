@@ -5,6 +5,7 @@ import os
 import glob
 import time
 import sys
+import subprocess
 
 def main():
     # Company CSV files directory
@@ -29,20 +30,29 @@ def main():
         csv_name = os.path.basename(csv_file)
         print(f"\n[{i+1}/{len(csv_files)}] Processing: {csv_name}")
         
-        # Build command
-        command = f'python extract_contact_info.py --csv "{csv_file}" --url-column Domain --headless --merge-results'
-        print(f"Executing command: {command}")
+        # Build command (using list format to avoid injection attacks)
+        command = [
+            'python', 
+            'extract_contact_info.py', 
+            '--csv', csv_file, 
+            '--url-column', 'Domain', 
+            '--headless', 
+            '--merge-results'
+        ]
+        print(f"Executing command: {' '.join(command)}")
         
-        # Execute command
+        # Execute command (using subprocess.run instead of os.system for security)
         start_time = time.time()
-        exit_code = os.system(command)
+        result = subprocess.run(command, capture_output=True, text=True)
         end_time = time.time()
         
         # Check command execution result
-        if exit_code == 0:
+        if result.returncode == 0:
             print(f"✓ Successfully processed {csv_name}, Duration: {end_time - start_time:.2f} seconds")
         else:
-            print(f"✗ Failed to process {csv_name}, Exit code: {exit_code}")
+            print(f"✗ Failed to process {csv_name}, Exit code: {result.returncode}")
+            if result.stderr:
+                print(f"  Error message: {result.stderr}")
         
         # Wait before processing the next file
         if i < len(csv_files) - 1:

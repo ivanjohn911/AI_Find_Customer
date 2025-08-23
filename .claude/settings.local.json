@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__zen__thinkdeep",
+      "Bash(claude --version)",
+      "Bash(yarn global:*)",
+      "Bash(npm view:*)",
+      "mcp__zen__codereview",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(streamlit --version)",
+      "mcp__zen__debug",
+      "Bash(chmod:*)",
+      "Bash(docker build:*)"
+    ],
+    "deny": []
+  }
+}

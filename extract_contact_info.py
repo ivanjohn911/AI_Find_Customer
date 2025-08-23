@@ -774,12 +774,12 @@ class ContactExtractor:
             
             for url in urls:
                 self.process_url(url.strip())
-                
-            # 处理完所有URL后关闭浏览器
-            self.website_extractor.close_browser()
+        
         except Exception as e:
             print(f"处理URL列表时出错: {e}")
-            # 确保浏览器被关闭
+        
+        finally:
+            # 确保浏览器在所有情况下都被关闭
             self.website_extractor.close_browser()
     
     def process_csv_file(self, csv_file, url_column='URL', domain_column='Domain'):
@@ -834,12 +834,12 @@ class ContactExtractor:
                 else:
                     raise ValueError(f"CSV file does not contain required column: {url_column} or {domain_column}")
                     
-            # 处理完所有URL后关闭浏览器
-            self.website_extractor.close_browser()
         
         except Exception as e:
             print(f"Error processing CSV file: {e}")
-            # 确保浏览器被关闭
+        
+        finally:
+            # 确保浏览器在所有情况下都被关闭
             self.website_extractor.close_browser()
     
     def save_results(self):
