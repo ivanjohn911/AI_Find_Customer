@@ -35,8 +35,8 @@ async def test_embedded_consumer_claims_and_completes_job(monkeypatch, tmp_path)
     )()
     monkeypatch.setattr("api.app.get_settings", lambda: settings)
     monkeypatch.setattr(
-        "api.app.run_hunt_payload",
-        lambda args, payload: {"hunt_id": "hunt-embedded", "lead_count": 3, "email_sequence_count": 2, "campaign": None},
+        "api.app._run_embedded_consumer_job",
+        AsyncMock(return_value={"hunt_id": "hunt-embedded", "lead_count": 3, "email_sequence_count": 2, "campaign": None}),
     )
 
     assert await _run_automation_consumer_once() is True
@@ -77,11 +77,11 @@ async def test_embedded_consumer_stops_cancelled_job(monkeypatch, tmp_path):
     )()
     monkeypatch.setattr("api.app.get_settings", lambda: settings)
 
-    def fake_run_hunt_payload(args, payload):
+    async def fake_run_hunt_payload(args, payload):
         queue.cancel(job_id, updated_at="2026-04-05T00:01:00+00:00")
         raise JobCancelledError("Queue job cancelled by user")
 
-    monkeypatch.setattr("api.app.run_hunt_payload", fake_run_hunt_payload)
+    monkeypatch.setattr("api.app._run_embedded_consumer_job", fake_run_hunt_payload)
     requested: list[tuple[str, str]] = []
     monkeypatch.setattr("api.app.request_hunt_cancel", lambda hunt_id, reason="": requested.append((hunt_id, reason)) or True)
 

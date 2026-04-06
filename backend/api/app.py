@@ -16,10 +16,18 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.automation_routes import router as automation_router
 from api.hunt_store import load_all_hunts
-from api.email_routes import router as email_router
+from api.email_routes import (
+    CreateCampaignRequest,
+    create_email_campaign,
+    router as email_router,
+    start_email_campaign,
+)
 from api.routes import (
+    HuntRequest,
     TemplateSeedRequest,
     _prepare_template_seed,
+    _hunts,
+    create_hunt_internal,
     router,
     start_background_workers,
     stop_background_workers,
@@ -32,6 +40,9 @@ from automation.metrics import collect_automation_metrics, collect_automation_st
 from automation.notifier import (
     render_alert_text,
     render_discovery_batch_text,
+    render_hunt_completed_text,
+    render_hunt_failed_text,
+    render_hunt_started_text,
     render_send_batch_text,
     render_summary_text,
     send_feishu_text,
@@ -42,7 +53,7 @@ from emailing.readiness import ensure_imap_tested, ensure_smtp_tested
 from emailing.reply_detector import run_reply_detection_once
 from emailing.scheduler import run_scheduler_once
 from emailing.store import EmailStore
-from scripts.headless_worker import JobCancelledError, run_hunt_payload
+from scripts.headless_worker import JobCancelledError, _campaign_name
 
 # Configure logging for the entire application
 logging.basicConfig(
@@ -72,6 +83,13 @@ def _now_iso() -> str:
 
 def _automation_worker_id() -> str:
     return f"{socket.gethostname()}:embedded-consumer"
+
+
+def _notify_feishu(text: str) -> None:
+    webhook_url = str(get_settings().automation_feishu_webhook_url or "").strip()
+    if not webhook_url:
+        return
+    send_feishu_text(webhook_url, text)
 
 
 def _extract_hunt_id_from_error(message: str) -> str:
@@ -206,6 +224,133 @@ async def _template_seed_prewarm_loop() -> None:
         await asyncio.sleep(max(1, int(get_settings().automation_consumer_poll_seconds)))
 
 
+async def _wait_for_hunt_embedded(*, hunt_id: str, poll_seconds: int, should_cancel: object | None = None) -> dict[str, str]:
+    last_status = ""
+    while True:
+        if callable(should_cancel) and should_cancel():
+            raise JobCancelledError(f"queue job cancelled while waiting for hunt {hunt_id}")
+        hunt = _hunts.get(hunt_id)
+        if not hunt:
+            raise RuntimeError(f"hunt {hunt_id} not found")
+        current = str(hunt.get("status", "") or "")
+        stage = str(hunt.get("current_stage", "") or "")
+        if current != last_status:
+            result = hunt.get("result") or {}
+            logger.info(
+                "hunt=%s status=%s stage=%s leads=%s emails=%s",
+                hunt_id[:8],
+                current,
+                stage or "-",
+                len(result.get("leads", []) or []),
+                hunt.get("email_sequences_count", 0),
+            )
+            last_status = current
+        if current in {"completed", "failed", "cancelled"}:
+            return {
+                "status": current,
+                "error": str(hunt.get("error", "") or ""),
+            }
+        await asyncio.sleep(max(1, poll_seconds))
+
+
+async def _run_embedded_consumer_job(args: Namespace, payload: dict[str, object]) -> dict[str, object]:
+    progress_callback = getattr(args, "progress_callback", None)
+    cancel_check = getattr(args, "cancel_check", None)
+
+    def report(stage: str, message: str, **extra: object) -> None:
+        if callable(progress_callback):
+            progress_callback(stage=stage, message=message, **extra)
+
+    def ensure_not_cancelled() -> None:
+        if callable(cancel_check) and cancel_check():
+            raise JobCancelledError("Queue job cancelled by user")
+
+    if bool(payload.get("enable_email_craft")) and not isinstance(payload.get("template_seed"), dict):
+        try:
+            ensure_not_cancelled()
+            report("template_seed", "Preparing email template seed", template_seed_status="preparing")
+            template_seed = await _prepare_template_seed(_template_seed_request_from_payload(payload))
+            payload = dict(payload)
+            payload["template_seed"] = template_seed
+            report(
+                "template_seed",
+                "Template seed prepared",
+                template_seed_status="ready",
+                template_seed_source=str(template_seed.get("source", "") or "pre_generated"),
+            )
+            logger.info("prepared template seed before hunt creation")
+        except Exception as exc:
+            report("template_seed", f"Template seed preparation failed: {exc}", template_seed_status="failed")
+            logger.warning("template seed preparation failed, continuing without pre-generated seed: %s", exc)
+
+    ensure_not_cancelled()
+    report("create_hunt", "Creating hunt from queue job")
+    created = await create_hunt_internal(HuntRequest(**payload))
+    hunt_id = str(created.hunt_id)
+    report("hunt_created", "Hunt created, waiting for execution", hunt_id=hunt_id)
+    try:
+        _notify_feishu(render_hunt_started_text(payload, hunt_id=hunt_id))
+    except Exception as exc:
+        logger.warning("failed to send start notification for hunt=%s: %s", hunt_id[:8], exc)
+
+    try:
+        ensure_not_cancelled()
+        report("wait_hunt", "Consumer is polling hunt status", hunt_id=hunt_id)
+        status = await _wait_for_hunt_embedded(
+            hunt_id=hunt_id,
+            poll_seconds=int(args.status_poll_seconds),
+            should_cancel=cancel_check,
+        )
+        if str(status.get("status", "")) != "completed":
+            raise RuntimeError(f"hunt {hunt_id} failed: {status.get('error', 'unknown error')}")
+
+        ensure_not_cancelled()
+        report("load_result", "Loading completed hunt result", hunt_id=hunt_id)
+        hunt = _hunts.get(hunt_id) or {}
+        result = hunt.get("result") or {}
+        leads = result.get("leads") or []
+        sequences = result.get("email_sequences") or []
+
+        campaign_summary: dict[str, object] | None = None
+        if args.auto_start_campaign and payload.get("enable_email_craft"):
+            ensure_not_cancelled()
+            report("create_campaign", "Creating campaign from approved email sequences", hunt_id=hunt_id)
+            created_campaign = await create_email_campaign(
+                hunt_id,
+                CreateCampaignRequest(name=_campaign_name(args.campaign_name_prefix, hunt_id)),
+            )
+            campaign_id = str(created_campaign.campaign_id)
+            sequence_count = int(created_campaign.sequence_count or 0)
+            if sequence_count > 0:
+                ensure_not_cancelled()
+                report("start_campaign", "Starting campaign and handing off to scheduler", hunt_id=hunt_id)
+                campaign_summary = await start_email_campaign(campaign_id)
+            else:
+                report("campaign_draft", "Campaign created but no send-ready sequences were available", hunt_id=hunt_id)
+                campaign_summary = {"campaign_id": campaign_id, "status": "draft", "sequence_count": 0}
+
+        final_result: dict[str, object] = {
+            "hunt_id": hunt_id,
+            "website_url": str(payload.get("website_url", "") or ""),
+            "lead_count": len(leads) if isinstance(leads, list) else 0,
+            "email_sequence_count": len(sequences) if isinstance(sequences, list) else 0,
+            "campaign": campaign_summary,
+        }
+        report("completed", "Queue job completed", hunt_id=hunt_id)
+        try:
+            _notify_feishu(render_hunt_completed_text(final_result))
+        except Exception as exc:
+            logger.warning("failed to send completion notification for hunt=%s: %s", hunt_id[:8], exc)
+        return final_result
+    except Exception as exc:
+        report("failed", f"Queue job failed: {exc}", hunt_id=hunt_id)
+        try:
+            _notify_feishu(render_hunt_failed_text(payload, error_message=str(exc)))
+        except Exception as notify_exc:
+            logger.warning("failed to send failure notification for hunt=%s: %s", hunt_id[:8], notify_exc)
+        raise
+
+
 async def _run_automation_consumer_once() -> bool:
     settings = get_settings()
     queue = HuntJobQueue(settings.automation_queue_db_path)
@@ -242,16 +387,10 @@ async def _run_automation_consumer_once() -> bool:
         progress_message="Embedded consumer claimed this queue job",
     )
 
-    host = settings.api_host.strip() or "127.0.0.1"
-    if host == "0.0.0.0":
-        host = "127.0.0.1"
     consumer_args = Namespace(
-        api_base_url=f"http://{host}:{settings.api_port}",
-        api_token=settings.api_access_token,
         auto_start_campaign=bool(settings.automation_consumer_auto_start_campaign),
         campaign_name_prefix="Auto Campaign",
         status_poll_seconds=int(settings.automation_consumer_status_poll_seconds),
-        request_timeout_seconds=int(settings.automation_consumer_request_timeout_seconds),
     )
     consumer_args.progress_callback = lambda stage, message, **extra: queue.update_progress(
         job_id,
@@ -265,7 +404,7 @@ async def _run_automation_consumer_once() -> bool:
     consumer_args.cancel_check = lambda: queue.is_cancellation_requested(job_id)
 
     try:
-        result = await asyncio.to_thread(run_hunt_payload, consumer_args, job.get("payload") or {})
+        result = await _run_embedded_consumer_job(consumer_args, job.get("payload") or {})
         queue.mark_completed(job_id, hunt_id=str(result["hunt_id"]), finished_at=_now_iso())
         update_worker_state(
             "consumer",

@@ -1073,12 +1073,7 @@ async def prepare_email_template_seed(request: TemplateSeedRequest):
     return TemplateSeedResponse(template_seed=await _prepare_template_seed(request))
 
 
-@router.post("/hunts", response_model=HuntResponse, dependencies=[Depends(require_api_access)])
-async def create_hunt(request: HuntRequest, background_tasks: BackgroundTasks):
-    """Start a new hunt pipeline in the background.
-
-    Returns a hunt_id to track progress.
-    """
+def _initialize_hunt(request: HuntRequest) -> tuple[str, HuntRequest]:
     uploaded_file_ids = _validate_uploaded_file_ids(request.uploaded_file_ids)
     hunt_id = str(uuid.uuid4())
     _hunts[hunt_id] = {
@@ -1098,14 +1093,29 @@ async def create_hunt(request: HuntRequest, background_tasks: BackgroundTasks):
         "email_template_notes": request.email_template_notes,
     }
     save_hunt(hunt_id, _hunts[hunt_id])
-
-    request = request.model_copy(
+    prepared_request = request.model_copy(
         update={
             "uploaded_file_ids": uploaded_file_ids,
             "enable_email_craft": request.enable_email_craft,
         }
     )
-    background_tasks.add_task(_run_hunt, hunt_id, request)
+    return hunt_id, prepared_request
+
+
+async def create_hunt_internal(request: HuntRequest) -> HuntResponse:
+    hunt_id, prepared_request = _initialize_hunt(request)
+    asyncio.create_task(_run_hunt(hunt_id, prepared_request))
+    return HuntResponse(hunt_id=hunt_id, status="pending")
+
+
+@router.post("/hunts", response_model=HuntResponse, dependencies=[Depends(require_api_access)])
+async def create_hunt(request: HuntRequest, background_tasks: BackgroundTasks):
+    """Start a new hunt pipeline in the background.
+
+    Returns a hunt_id to track progress.
+    """
+    hunt_id, prepared_request = _initialize_hunt(request)
+    background_tasks.add_task(_run_hunt, hunt_id, prepared_request)
 
     return HuntResponse(hunt_id=hunt_id, status="pending")
 
