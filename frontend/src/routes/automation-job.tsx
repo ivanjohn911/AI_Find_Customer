@@ -117,6 +117,16 @@ function flattenCampaignSequences(campaigns: EmailCampaignListItem[] | undefined
   );
 }
 
+function renderJsonPreview(value: unknown) {
+  if (value == null) return "-";
+  if (typeof value === "string") return value || "-";
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
 function SequenceDetailSheet({
   sequenceId,
   open,
@@ -410,6 +420,10 @@ export function AutomationJobPage() {
       );
     });
   }, [deliveryFilter, campaignSequences]);
+  const templateSeed = asRecord(job?.template_seed);
+  const templateProfile = asRecord(templateSeed.template_profile);
+  const templatePlan = asRecord(templateSeed.template_plan);
+  const preparedFrom = asRecord(templateSeed.prepared_from);
   const navItems = [
     ["overview", "执行概况"],
     ["pipeline", "执行链路"],
@@ -745,6 +759,46 @@ export function AutomationJobPage() {
                 {job.progress_stage === "queued" || job.progress_stage === "claimed" || job.progress_stage === "template_seed" || job.progress_stage === "create_hunt"
                   ? "Hunt 还没开始深挖企业，稍后会在这里显示。"
                   : "当前没有匹配的企业结果"}
+              </div>
+            )}
+            {job.template_seed_status === "ready" && Object.keys(templateSeed).length > 0 && (
+              <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium">预热模板 Seed</div>
+                    <div className="text-xs text-muted-foreground">
+                      这是在 Hunt 执行前准备好的模板策略，后续个性化邮件会基于这份 seed 继续生成。
+                    </div>
+                  </div>
+                  <Badge variant="outline">{job.template_seed_source || "pre_generated"}</Badge>
+                </div>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="space-y-2 rounded-md border bg-background p-3">
+                    <div className="text-sm font-medium">Prepared From</div>
+                    <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                      {renderJsonPreview(preparedFrom)}
+                    </pre>
+                  </div>
+                  <div className="space-y-2 rounded-md border bg-background p-3">
+                    <div className="text-sm font-medium">Template Profile</div>
+                    <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                      {renderJsonPreview(templateProfile)}
+                    </pre>
+                  </div>
+                  <div className="space-y-2 rounded-md border bg-background p-3">
+                    <div className="text-sm font-medium">Template Plan</div>
+                    <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                      {renderJsonPreview(templatePlan)}
+                    </pre>
+                  </div>
+                  <div className="space-y-2 rounded-md border bg-background p-3">
+                    <div className="text-sm font-medium">完整 Seed</div>
+                    <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                      {renderJsonPreview(templateSeed)}
+                    </pre>
+                  </div>
+                </div>
               </div>
             )}
           </CardContent>

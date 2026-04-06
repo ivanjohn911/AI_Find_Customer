@@ -333,6 +333,7 @@ export interface AutomationJob {
   progress_message: string;
   template_seed_status: string;
   template_seed_source: string;
+  template_seed: Record<string, unknown>;
   website_url: string;
   description: string;
   product_keywords: string[];

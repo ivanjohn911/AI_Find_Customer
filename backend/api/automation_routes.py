@@ -9,11 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from api.hunt_store import load_hunt, now_iso
-from api.routes import _hunts, request_hunt_cancel
+from api.routes import _hunts, request_hunt_cancel, _unique_leads_count
 from api.security import require_api_access
 from automation.job_queue import HuntJobQueue
 from automation.metrics import collect_automation_metrics, collect_automation_status
 from config.settings import get_settings
+from emailing.store import EmailStore
 
 router = APIRouter(prefix="/api/v1/automation", tags=["automation"])
 logger = logging.getLogger(__name__)
@@ -50,10 +51,123 @@ def _queue() -> HuntJobQueue:
     return queue
 
 
+def _email_store() -> EmailStore:
+    settings = get_settings()
+    store = EmailStore(settings.email_db_path)
+    store.init_db()
+    return store
+
+
+def _lead_preview(leads: list[Any], limit: int = 20) -> list[dict[str, Any]]:
+    preview: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for lead in leads:
+        if not isinstance(lead, dict):
+            continue
+        company = str(lead.get("company_name", "") or "").strip()
+        website = str(lead.get("website", "") or "").strip()
+        country = str(lead.get("country", "") or "").strip()
+        emails = [str(email).strip() for email in (lead.get("emails") or []) if str(email).strip()]
+        key = (website or company or "|".join(emails)).lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        preview.append(
+            {
+                "company_name": company,
+                "website": website,
+                "country": country,
+                "emails": emails,
+                "email_count": len(emails),
+            }
+        )
+        if len(preview) >= limit:
+            break
+    return preview
+
+
+def _email_sequence_preview(sequences: list[Any], limit: int = 10) -> list[dict[str, Any]]:
+    preview: list[dict[str, Any]] = []
+    for sequence in sequences:
+        if not isinstance(sequence, dict):
+            continue
+        lead = sequence.get("lead") if isinstance(sequence.get("lead"), dict) else {}
+        targets: list[str] = []
+        primary_target = sequence.get("target")
+        if isinstance(primary_target, dict):
+            primary_email = str(primary_target.get("target_email", "") or "").strip()
+            if primary_email:
+                targets.append(primary_email)
+        raw_targets = sequence.get("targets")
+        if isinstance(raw_targets, list):
+            for target in raw_targets:
+                if not isinstance(target, dict):
+                    continue
+                email = str(target.get("target_email", "") or "").strip()
+                if email:
+                    targets.append(email)
+        deduped_targets = list(dict.fromkeys(targets))
+        emails = sequence.get("emails") if isinstance(sequence.get("emails"), list) else []
+        preview.append(
+            {
+                "company_name": str(lead.get("company_name", "") or ""),
+                "website": str(lead.get("website", "") or ""),
+                "target_emails": deduped_targets,
+                "email_count": len(deduped_targets),
+                "subjects": [
+                    str(email.get("subject", "") or "")
+                    for email in emails
+                    if isinstance(email, dict)
+                ],
+            }
+        )
+        if len(preview) >= limit:
+            break
+    return preview
+
+
+def _campaign_preview(hunt_id: str) -> dict[str, Any]:
+    if not hunt_id:
+        return {"campaign_count": 0, "sequence_count": 0, "target_emails": []}
+    store = _email_store()
+    campaigns = store.list_campaigns_for_hunt(hunt_id)
+    sequences = []
+    for item in campaigns:
+        campaign = item.get("campaign") if isinstance(item, dict) else None
+        campaign_id = str((campaign or {}).get("id", "") or "")
+        if not campaign_id:
+            continue
+        sequences.extend(store.list_sequences_for_campaign(campaign_id))
+    target_emails = list(
+        dict.fromkeys(
+            str(sequence.get("lead_email", "") or "").strip().lower()
+            for sequence in sequences
+            if str(sequence.get("lead_email", "") or "").strip()
+        )
+    )
+    return {
+        "campaign_count": len(campaigns),
+        "sequence_count": len(sequences),
+        "target_emails": target_emails[:100],
+    }
+
+
 def _serialize_job(job: dict[str, Any]) -> dict[str, Any]:
     payload = job.get("payload") if isinstance(job.get("payload"), dict) else {}
+    template_seed = payload.get("template_seed") if isinstance(payload.get("template_seed"), dict) else {}
     hunt_id = str(job.get("last_hunt_id", "") or "")
     hunt = load_hunt(hunt_id) if hunt_id else None
+    result = (hunt or {}).get("result") if isinstance((hunt or {}).get("result"), dict) else {}
+    leads = result.get("leads") if isinstance(result.get("leads"), list) else []
+    email_sequences = result.get("email_sequences") if isinstance(result.get("email_sequences"), list) else []
+    campaign_summary = result.get("email_campaign_summary") if isinstance(result.get("email_campaign_summary"), dict) else {}
+    leads_count = int((hunt or {}).get("leads_count", 0) or 0)
+    if not leads_count and isinstance(leads, list):
+        leads_count = _unique_leads_count(leads)
+    email_sequences_count = int((hunt or {}).get("email_sequences_count", 0) or 0)
+    if not email_sequences_count and isinstance(email_sequences, list):
+        email_sequences_count = len(email_sequences)
+    campaign_preview = _campaign_preview(hunt_id)
     return {
         "job_id": str(job.get("id", "") or ""),
         "status": str(job.get("status", "") or ""),
@@ -69,6 +183,7 @@ def _serialize_job(job: dict[str, Any]) -> dict[str, Any]:
         "progress_message": str(job.get("progress_message", "") or ""),
         "template_seed_status": str(job.get("template_seed_status", "") or ""),
         "template_seed_source": str(job.get("template_seed_source", "") or ""),
+        "template_seed": template_seed,
         "website_url": str(payload.get("website_url", "") or ""),
         "description": str(payload.get("description", "") or ""),
         "product_keywords": list(payload.get("product_keywords", []) or []),
@@ -78,7 +193,14 @@ def _serialize_job(job: dict[str, Any]) -> dict[str, Any]:
         "hunt_status": str((hunt or {}).get("status", "") or ""),
         "hunt_stage": str((hunt or {}).get("current_stage", "") or ""),
         "hunt_error": str((hunt or {}).get("error", "") or ""),
-        "leads_count": int(((hunt or {}).get("result") or {}).get("leads_count", 0) or 0),
+        "leads_count": leads_count,
+        "email_sequences_count": email_sequences_count,
+        "lead_preview": _lead_preview(leads if isinstance(leads, list) else []),
+        "email_sequence_preview": _email_sequence_preview(email_sequences if isinstance(email_sequences, list) else []),
+        "campaign_summary": campaign_summary,
+        "campaign_count": int(campaign_preview["campaign_count"]),
+        "campaign_sequence_count": int(campaign_preview["sequence_count"]),
+        "campaign_target_emails": list(campaign_preview["target_emails"]),
     }
 
 

@@ -59,6 +59,11 @@ def test_automation_job_routes(monkeypatch):
             "target_regions": ["United States"],
             "target_lead_count": 100,
             "enable_email_craft": True,
+            "template_seed": {
+                "source": "pre_generated",
+                "template_profile": {"tone": "professional"},
+                "template_plan": {"cta_strategy": "Ask a qualification question"},
+            },
         },
     }
 
@@ -105,8 +110,10 @@ def test_automation_job_routes(monkeypatch):
     assert created.json()["job_id"] == "job-1"
     assert listed.status_code == 200
     assert listed.json()[0]["website_url"] == "https://www.gdushun.com/"
+    assert listed.json()[0]["template_seed"]["template_profile"]["tone"] == "professional"
     assert detail.status_code == 200
     assert detail.json()["target_lead_count"] == 100
+    assert detail.json()["template_seed"]["template_plan"]["cta_strategy"] == "Ask a qualification question"
     assert by_hunt.status_code == 200
     assert by_hunt.json()["last_hunt_id"] == "hunt-1"
     assert missing.status_code == 404
