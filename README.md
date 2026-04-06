@@ -401,28 +401,28 @@ EMAIL_REASONING_MODEL=openrouter/deepseek/deepseek-r1
 
 - 简单模式：`headless_worker.py`
   适合单机串行跑，一轮 hunt 完成后再开始下一轮
-- 队列模式：`hunt_queue.py producer` + `hunt_queue.py consumer`
-  适合你要的生产者-消费者结构
+- 队列模式：`hunt_queue.py producer` + `api.app` 内嵌 consumer
+  适合当前默认的生产者-消费者结构
 
-如果你要真正的生产者-消费者，推荐拆成三个常驻进程：
+如果你要真正的生产者-消费者，当前推荐拆成两个常驻进程：
 
-- `API 服务`：负责 hunt、邮件生成、campaign API、发送 scheduler、回信检测
+- `API 服务`：负责 hunt、内嵌 consumer、template seed prewarm、campaign API、发送 scheduler、回信检测
 - `Producer 服务`：持续往 `hunt_jobs` 队列写入新的挖掘任务
-- `Consumer 服务`：持续从 `hunt_jobs` 队列取任务，执行 hunt，并自动创建 / 启动 campaign
 
 这套结构本质上就是两层生产者-消费者：
 
 - 第一层生产者：`backend/scripts/hunt_queue.py producer`
-- 第一层消费者：`backend/scripts/hunt_queue.py consumer`
+- 第一层消费者：`api.app` 内嵌 `AutomationConsumer`
+- 模板预热：`api.app` 内嵌 `TemplateSeedWorker`
 - 第二层消费者：`api.app` 内置的 `EmailScheduler`
 
 当前真实逻辑再具体一点：
 
 1. `hunt_queue.py producer` 把 hunt payload 持久化写入 SQLite 的 `hunt_jobs`
-2. 如果 payload 开启了 `enable_email_craft`，consumer 会先调 `POST /api/v1/email-template-seeds/prepare` 生成 `template_seed`
-3. consumer 把 `template_seed` 注入 hunt payload，再调 `/api/v1/hunts` 创建真实 hunt
+2. `TemplateSeedWorker` 先为 `queued` job 预热 `template_seed`
+3. `AutomationConsumer` 领取 job，直接在进程内创建真实 hunt
 4. consumer 轮询这个 hunt，直到状态变成 `completed`
-5. hunt 完成后，如果开启了邮件生成，consumer 会自动调 `/api/v1/hunts/{hunt_id}/email-campaigns`
+5. hunt 完成后，如果开启了邮件生成，consumer 会自动创建并启动 campaign
 6. campaign 创建时，会把可发送的邮件序列写进 SQLite：
    - `lead_email_sequences`
    - `email_messages`
@@ -502,6 +502,8 @@ uvicorn api.app:app --host 0.0.0.0 --port 8000
 
 ### 启动 headless worker
 
+这是兼容保留的串行模式。它仍然可用，但不是当前推荐的长期运行方式。
+
 ```bash
 cd backend
 source .venv/bin/activate
@@ -522,7 +524,7 @@ python scripts/headless_worker.py \
 - 然后把邮件写入持久化待发送队列
 - 发送由后台 scheduler 按时间消费
 
-### 启动真正的 producer / consumer
+### 启动推荐的 queue 模式
 
 先准备任务模板：
 
@@ -548,7 +550,20 @@ python scripts/hunt_queue.py producer \
 - 每 60 秒检查一次
 - 如果 `hunt_jobs` 里排队中和执行中的任务少于 3 个，就继续入队
 
-启动 consumer：
+默认情况下，不需要再单独启动 consumer。`api.app` 已内嵌：
+
+- `AutomationConsumer`
+- `TemplateSeedWorker`
+- `EmailScheduler`
+- `EmailReply`
+
+只有当你明确关闭：
+
+```env
+AUTOMATION_EMBEDDED_CONSUMER_ENABLED=false
+```
+
+时，才需要单独启动 consumer：
 
 ```bash
 cd backend
@@ -567,7 +582,7 @@ python scripts/hunt_queue.py consumer \
 - 失败时 120 秒后自动回到队列
 - hunt 完成后自动建 campaign 并启动
 
-如果你要更强的挖掘吞吐，可以起多个 consumer 进程；它们会竞争领取 `hunt_jobs` 队列里的任务。
+如果你要更强的挖掘吞吐，可以显式关闭 embedded consumer 后，再起多个独立 consumer 进程；否则不要让它和内嵌 consumer 并跑。
 
 ### 状态监控与飞书通知
 
@@ -676,16 +691,24 @@ EMAIL_REQUIRE_APPROVAL_BEFORE_SEND=false
 仓库已经提供 systemd 示例文件：
 
 - [deploy/systemd/ai-hunter-api.service](/Users/xiongbojian/work/opensource/AI_Find_Customer/deploy/systemd/ai-hunter-api.service)
+- [deploy/systemd/ai-hunter-producer.service](/Users/xiongbojian/work/opensource/AI_Find_Customer/deploy/systemd/ai-hunter-producer.service)
 - [deploy/systemd/ai-hunter-worker.service](/Users/xiongbojian/work/opensource/AI_Find_Customer/deploy/systemd/ai-hunter-worker.service)
+
+推荐：
+
+- `ai-hunter-api.service`
+- `ai-hunter-producer.service`
+
+`ai-hunter-worker.service` 是兼容保留的串行 worker 示例，不建议和 embedded consumer 一起长期并跑。
 
 把里面的 `/opt/ai-hunter/backend` 改成你 VPS 的实际路径后：
 
 ```bash
 sudo cp deploy/systemd/ai-hunter-api.service /etc/systemd/system/
-sudo cp deploy/systemd/ai-hunter-worker.service /etc/systemd/system/
+sudo cp deploy/systemd/ai-hunter-producer.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now ai-hunter-api
-sudo systemctl enable --now ai-hunter-worker
+sudo systemctl enable --now ai-hunter-producer
 ```
 
 ### 无界面模式测试
