@@ -128,8 +128,13 @@ def test_collect_automation_status_and_metrics(monkeypatch, tmp_path):
         "hunt_1": {
             "status": "completed",
             "created_at": "9999-04-04T00:00:00+00:00",
+            "website_url": "https://completed.example.com",
             "result": {
-                "leads": [{"company_name": "A"}, {"company_name": "B"}],
+                "leads": [
+                    {"company_name": "A", "website": "https://a.example.com"},
+                    {"company_name": "A duplicate", "website": "https://a.example.com"},
+                    {"company_name": "B"},
+                ],
                 "email_sequences": [{}, {}],
             },
         },
@@ -159,6 +164,9 @@ def test_collect_automation_status_and_metrics(monkeypatch, tmp_path):
     assert metrics["recent_reply_events"][0]["from_email"] == "buyer@example.com"
     assert metrics["top_failure_reasons"][0]["failure_reason"] == "smtp_timeout"
     assert metrics["recent_completed_hunts"][0]["lead_count"] == 2
+    assert metrics["recent_completed_hunts"][0]["website_url"] == "https://completed.example.com"
+    assert status["hunts"]["running_details"] == []
+    assert metrics["recent_failed_hunts"][0]["website_url"] == "https://retry.example.com"
 
 
 def test_collect_automation_metrics_loads_persisted_hunts_when_not_provided(monkeypatch, tmp_path):

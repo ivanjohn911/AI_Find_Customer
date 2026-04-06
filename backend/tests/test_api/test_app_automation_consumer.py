@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from unittest.mock import AsyncMock
 
-from api.app import _run_automation_consumer_once, _run_template_seed_prewarm_once
+from api.app import _notify_feishu_async, _run_automation_consumer_once, _run_template_seed_prewarm_once
 from automation.job_queue import HuntJobQueue
 
 
@@ -130,3 +130,21 @@ async def test_template_seed_worker_prewarms_queued_job(monkeypatch, tmp_path):
     assert job["template_seed_status"] == "ready"
     assert job["template_seed_source"] == "pre_generated"
     assert isinstance(job["payload"]["template_seed"], dict)
+
+
+@pytest.mark.asyncio
+async def test_embedded_consumer_offloads_feishu_notifications(monkeypatch):
+    monkeypatch.setattr("api.app.send_feishu_text", lambda webhook, text: {"ok": True})
+    monkeypatch.setattr("api.app.get_settings", lambda: type("S", (), {"automation_feishu_webhook_url": "https://feishu.test/hook"})())
+
+    called: list[tuple] = []
+
+    async def fake_to_thread(func, *args, **kwargs):
+        called.append((func, args, kwargs))
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr("api.app.asyncio.to_thread", fake_to_thread)
+    await _notify_feishu_async("hello")
+
+    assert called
+    assert "hello" in called[0][1]

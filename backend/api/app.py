@@ -92,6 +92,10 @@ def _notify_feishu(text: str) -> None:
     send_feishu_text(webhook_url, text)
 
 
+async def _notify_feishu_async(text: str) -> None:
+    await asyncio.to_thread(_notify_feishu, text)
+
+
 def _extract_hunt_id_from_error(message: str) -> str:
     match = re.search(r"hunt\s+([^\s:]+)\s+failed:", str(message or ""))
     return str(match.group(1)) if match else ""
@@ -289,7 +293,7 @@ async def _run_embedded_consumer_job(args: Namespace, payload: dict[str, object]
     hunt_id = str(created.hunt_id)
     report("hunt_created", "Hunt created, waiting for execution", hunt_id=hunt_id)
     try:
-        _notify_feishu(render_hunt_started_text(payload, hunt_id=hunt_id))
+        await _notify_feishu_async(render_hunt_started_text(payload, hunt_id=hunt_id))
     except Exception as exc:
         logger.warning("failed to send start notification for hunt=%s: %s", hunt_id[:8], exc)
 
@@ -338,14 +342,14 @@ async def _run_embedded_consumer_job(args: Namespace, payload: dict[str, object]
         }
         report("completed", "Queue job completed", hunt_id=hunt_id)
         try:
-            _notify_feishu(render_hunt_completed_text(final_result))
+            await _notify_feishu_async(render_hunt_completed_text(final_result))
         except Exception as exc:
             logger.warning("failed to send completion notification for hunt=%s: %s", hunt_id[:8], exc)
         return final_result
     except Exception as exc:
         report("failed", f"Queue job failed: {exc}", hunt_id=hunt_id)
         try:
-            _notify_feishu(render_hunt_failed_text(payload, error_message=str(exc)))
+            await _notify_feishu_async(render_hunt_failed_text(payload, error_message=str(exc)))
         except Exception as notify_exc:
             logger.warning("failed to send failure notification for hunt=%s: %s", hunt_id[:8], notify_exc)
         raise
